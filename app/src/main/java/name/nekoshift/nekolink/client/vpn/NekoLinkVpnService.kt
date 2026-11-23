@@ -1,4 +1,4 @@
-package online.fasttunnelvpn.client.vpn
+package name.nekoshift.nekolink.client.vpn
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,25 +8,26 @@ import android.net.VpnService
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import online.fasttunnelvpn.client.MainActivity
-import online.fasttunnelvpn.client.R
+import name.nekoshift.nekolink.client.MainActivity
+import name.nekoshift.nekolink.client.R
 import android.content.pm.ServiceInfo
+import android.os.Build
 
-class FastTunnelVpnService : VpnService() {
+class NekoLinkVpnService : VpnService() {
 
     companion object {
-        private const val NOTIFICATION_CHANNEL_ID = "fasttunnel_vpn"
+        private const val NOTIFICATION_CHANNEL_ID = "nekolink_vpn"
         private const val NOTIFICATION_ID = 1
     }
 
     override fun onCreate() {
         super.onCreate()
 
-        Log.i("FastTunnelVpnService", "VPN service created")
+        Log.i("NekoLinkVpnService", "VPN service created")
 
         createNotificationChannel()
 
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
                 createNotification(),
@@ -45,7 +46,7 @@ class FastTunnelVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        Log.i("FastTunnelVpnService", "VPN service destroyed")
+        Log.i("NekoLinkVpnService", "VPN service destroyed")
         super.onDestroy()
     }
 
@@ -55,7 +56,7 @@ class FastTunnelVpnService : VpnService() {
             "VPN-соединение",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Состояние VPN-соединения FastTunnel"
+            description = "Состояние VPN-соединения NekoLink"
         }
 
         val notificationManager = getSystemService(NotificationManager::class.java)
@@ -65,10 +66,11 @@ class FastTunnelVpnService : VpnService() {
     private fun createNotification() =
         NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("FastTunnel Client")
+            .setContentTitle("NekoLink")
             .setContentText("Служба VPN запущена")
             .setOngoing(true)
             .setContentIntent(createContentIntent())
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
 
     private fun createContentIntent(): PendingIntent {

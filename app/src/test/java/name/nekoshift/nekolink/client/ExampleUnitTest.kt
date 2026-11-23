@@ -1,4 +1,4 @@
-package online.fasttunnelvpn.client
+package name.nekoshift.nekolink.client
 
 import org.junit.Test
 

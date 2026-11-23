@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "online.fasttunnelvpn.client"
+    namespace = "name.nekoshift.nekolink.client"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "online.fasttunnelvpn.client"
+        applicationId = "name.nekoshift.nekolink.client"
         minSdk = 26
         targetSdk = 37
         versionCode = 1

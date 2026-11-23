@@ -1,4 +1,4 @@
-package online.fasttunnelvpn.client
+package name.nekoshift.nekolink.client
 
 import android.app.Activity
 import android.content.Intent
@@ -17,14 +17,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.content.ContextCompat
 
-import online.fasttunnelvpn.client.ui.theme.FastTunnelClientTheme
-import online.fasttunnelvpn.client.vpn.FastTunnelVpnService
+import name.nekoshift.nekolink.client.ui.theme.NekoLinkTheme
+import name.nekoshift.nekolink.client.vpn.NekoLinkVpnService
 
 class MainActivity : ComponentActivity() {
 
@@ -34,7 +31,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            FastTunnelClientTheme {
+            NekoLinkTheme {
                 VpnPermissionScreen()
             }
         }
@@ -43,20 +40,20 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun VpnPermissionScreen() {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        Log.i("FastTunnel", "Notification permission granted: $granted")
+        Log.i("NekoLink", "Notification permission granted: $granted")
     }
 
     fun startVpnService() {
-        Log.i("FastTunnel", "Starting VPN service")
+        Log.i("NekoLink", "Starting VPN service")
 
         val serviceIntent = Intent(
             context,
-            FastTunnelVpnService::class.java
+            NekoLinkVpnService::class.java
         )
 
        context.startForegroundService(serviceIntent)
@@ -94,7 +91,7 @@ fun VpnPermissionScreen() {
 @Preview(showBackground = true)
 @Composable
 fun VpnPermissionScreenPreview() {
-    FastTunnelClientTheme {
+    NekoLinkTheme {
         VpnPermissionScreen()
     }
 }

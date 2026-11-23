@@ -1,4 +1,4 @@
-package online.fasttunnelvpn.client.ui.theme
+package name.nekoshift.nekolink.client.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

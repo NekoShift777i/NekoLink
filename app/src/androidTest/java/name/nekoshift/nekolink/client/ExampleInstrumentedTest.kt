@@ -1,4 +1,4 @@
-package online.fasttunnelvpn.client
+package name.nekoshift.nekolink.client
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +19,6 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("online.fasttunnelvpn.client", appContext.packageName)
+        assertEquals("name.nekoshift.nekolink.client", appContext.packageName)
     }
 }

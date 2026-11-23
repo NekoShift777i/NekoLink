@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FastTunnel Client"
+rootProject.name = "NekoLink"
 include(":app")
