@@ -19,9 +19,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 
 import name.nekoshift.nekolink.client.ui.theme.NekoLinkTheme
 import name.nekoshift.nekolink.client.vpn.NekoLinkVpnService
+import name.nekoshift.nekolink.client.vpn.VpnState
+import name.nekoshift.nekolink.client.vpn.VpnStateManager
 
 class MainActivity : ComponentActivity() {
 
@@ -41,6 +45,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun VpnPermissionScreen() {
     val context = LocalContext.current
+    val vpnState by VpnStateManager.state.collectAsState()
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -60,6 +65,21 @@ fun VpnPermissionScreen() {
 
     }
 
+    fun stopVpnService() {
+        Log.i("NekoLInk", "Stopping VPN Serivce")
+
+        VpnStateManager.updateState(VpnState.DISCONNECTING)
+
+        val serviceIntent = Intent(
+            context,
+            NekoLinkVpnService::class.java
+        )
+
+        if (!context.stopService(serviceIntent)) {
+            VpnStateManager.updateState((VpnState.DISCONNECTED))
+        }
+    }
+
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.StartActivityForResult()
             ) { result ->
@@ -74,16 +94,35 @@ fun VpnPermissionScreen() {
     ) {
         Button(
             onClick = {
-                val permissionIntent = VpnService.prepare(context)
+                when (vpnState) {
+                    VpnState.DISCONNECTED, VpnState.ERROR -> {
+                        val permissionIntent = VpnService.prepare(context)
 
-                if (permissionIntent != null) {
-                    vpnPermissionLauncher.launch(permissionIntent)
-                } else {
-                    startVpnService()
+                        if (permissionIntent != null) {
+                            vpnPermissionLauncher.launch(permissionIntent)
+                        } else {
+                            startVpnService()
+                        }
+                    }
+
+                    VpnState.CONNECTING, VpnState.CONNECTED -> {
+                        stopVpnService()
+                    }
+
+                    VpnState.DISCONNECTING -> Unit
                 }
-            }
+            },
+            enabled = vpnState != VpnState.DISCONNECTING
         ) {
-            Text("Подключиться")
+            Text(
+                when (vpnState) {
+                    VpnState.DISCONNECTED -> "Подключиться"
+                    VpnState.CONNECTING -> "Отменить подключение"
+                    VpnState.CONNECTED -> "Отключиться"
+                    VpnState.DISCONNECTING -> "Отключение..."
+                    VpnState.ERROR -> "Повторить подключение"
+                }
+            )
         }
     }
 }

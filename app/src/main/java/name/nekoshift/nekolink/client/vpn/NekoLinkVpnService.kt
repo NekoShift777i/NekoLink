@@ -22,6 +22,7 @@ class NekoLinkVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
+        VpnStateManager.updateState(VpnState.CONNECTING)
 
         Log.i("NekoLinkVpnService", "VPN service created")
 
@@ -47,6 +48,9 @@ class NekoLinkVpnService : VpnService() {
 
     override fun onDestroy() {
         Log.i("NekoLinkVpnService", "VPN service destroyed")
+
+        VpnStateManager.updateState(VpnState.DISCONNECTED)
+
         super.onDestroy()
     }
 
