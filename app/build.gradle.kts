@@ -3,8 +3,16 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-apply(from = rootProject.file("gradle/scripts/libxray.gradle.kts"))
-val downloadLibXray = tasks.named("downloadLibXray")
+val downloadLibXray = tasks.register<DownloadLibXrayTask>("downloadLibXray") {
+    group = "dependencies"
+    description = "Загрузка и проверка библиотеки libXray"
+
+    libXrayVersion.set(providers.gradleProperty("libXrayVersion"))
+    libXraySha256.set(providers.gradleProperty("libXraySha256"))
+
+    libraryFile.set(layout.projectDirectory.file("libs/libXray.aar"))
+    versionFile.set(layout.projectDirectory.file("libs/libXray.version"))
+}
 
 android {
     namespace = "name.nekoshift.nekolink.client"

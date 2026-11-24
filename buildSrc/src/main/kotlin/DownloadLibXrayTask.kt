@@ -108,14 +108,3 @@ abstract class DownloadLibXrayTask : DefaultTask() {
         }
     }
 }
-
-tasks.register<DownloadLibXrayTask>("downloadLibXray") {
-    group = "dependencies"
-    description = "Загрузка и проверка библиотеки libXray"
-
-    libXrayVersion.set(providers.gradleProperty("libXrayVersion"))
-    libXraySha256.set(providers.gradleProperty("libXraySha256"))
-
-    libraryFile.set(layout.projectDirectory.file("libs/libXray.aar"))
-    versionFile.set(layout.projectDirectory.file("libs/libXray.version"))
-}

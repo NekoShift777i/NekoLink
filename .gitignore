@@ -25,3 +25,8 @@ local.properties
 # Библиотеки Xray
 /app/libs/libXray.aar
 /app/libs/libXray.version
+
+# Служебные файлы buildSrc
+/buildSrc/build/
+/buildSrc/.gradle/
+/buildSrc/.kotlin/
