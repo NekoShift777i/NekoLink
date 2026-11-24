@@ -3,6 +3,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+apply(from = rootProject.file("gradle/scripts/libxray.gradle.kts"))
+val downloadLibXray = tasks.named("downloadLibXray")
+
 android {
     namespace = "name.nekoshift.nekolink.client"
     compileSdk {
@@ -37,7 +40,9 @@ android {
 }
 
 dependencies {
-    implementation(files("libs/libXray.aar"))
+    implementation(
+        files("libs/libXray.aar").builtBy(downloadLibXray)
+    )
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

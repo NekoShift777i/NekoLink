@@ -20,3 +20,8 @@ local.properties
 
 # Logs
 *.log
+
+#Libs
+# Библиотеки Xray
+/app/libs/libXray.aar
+/app/libs/libXray.version
