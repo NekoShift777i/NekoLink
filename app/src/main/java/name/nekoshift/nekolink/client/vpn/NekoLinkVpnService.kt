@@ -34,32 +34,9 @@ class NekoLinkVpnService : VpnService() {
 
         Log.i("NekoLinkVpnService", "VPN service created")
 
-        Log.i("NekoLinkVpnService", "libXray API version: ${XrayCoreManager.getApiVersion()}")
-        Log.i("NekoLinkVpnService", "Xray core version: ${XrayCoreManager.getVersion()}")
-
-        try {
-            XrayCoreManager.testConfig(XrayTestConfig.config)
-            Log.i("NekoLinkVpnService", "Xray configuration test passed")
-
-            XrayCoreManager.start(XrayTestConfig.config)
-            Log.i("NekoLinkVpnService", "Xray core start requested")
-
-            val isRunning = XrayCoreManager.isRunning()
-            Log.i("NekoLinkVpnService", "Xray core running: $isRunning")
-
-            if (!isRunning) {
-                throw IllegalStateException("Ядро Xray не запущено")
-            }
-        } catch (e: Exception) {
-            Log.e("NekoLinkVpnService", "Failed to initialize Xray core", e)
-            VpnStateManager.updateState(VpnState.ERROR)
-            stopSelf()
-            return
-        }
-
         createNotificationChannel()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIFICATION_ID,
                 createNotification(),
@@ -73,9 +50,25 @@ class NekoLinkVpnService : VpnService() {
         }
 
         try {
+            Log.i("NekoLinkVpnService", "libXray API version: ${XrayCoreManager.getApiVersion()}")
+            Log.i("NekoLinkVpnService", "Xray core version: ${XrayCoreManager.getVersion()}")
+
+            XrayCoreManager.testConfig(XrayTestConfig.config)
+            Log.i("NekoLinkVpnService", "Xray configuration test passed")
+
+            XrayCoreManager.start(XrayTestConfig.config)
+            Log.i("NekoLinkVpnService", "Xray core start requested")
+
+            val isRunning = XrayCoreManager.isRunning()
+            Log.i("NekoLinkVpnService", "Xray core running: $isRunning")
+
+            if (!isRunning) {
+                throw IllegalStateException("Ядро Xray не запущено")
+            }
+
             createVpnInterface()
         } catch (e: Exception) {
-            Log.e("NekoLinkVpnService", "Failed to create TUN interface", e)
+            Log.e("NekoLinkVpnService", "Failed to initialize VPN service", e)
             VpnStateManager.updateState(VpnState.ERROR)
             stopSelf()
         }
