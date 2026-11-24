@@ -3,6 +3,8 @@ package name.nekoshift.nekolink.client.xray
 import libXray.LibXray
 import org.json.JSONObject
 
+import android.util.Log
+
 object XrayCoreManager {
 
     fun getApiVersion(): Long {
@@ -49,6 +51,11 @@ object XrayCoreManager {
 
         val response = JSONObject(
             LibXray.invoke(request.toString())
+        )
+
+        Log.d(
+            "XrayCoreManager",
+            "Xray API response ($method): $response"
         )
 
         if (!response.getBoolean("success")) {

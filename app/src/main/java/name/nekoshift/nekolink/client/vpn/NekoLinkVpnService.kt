@@ -18,12 +18,36 @@ import name.nekoshift.nekolink.client.MainActivity
 import name.nekoshift.nekolink.client.R
 import name.nekoshift.nekolink.client.xray.XrayTestConfig
 
+import libXray.LibXray
+
 class NekoLinkVpnService : VpnService() {
 
     companion object {
         private const val NOTIFICATION_CHANNEL_ID = "nekolink_vpn"
         private const val NOTIFICATION_ID = 1
         const val ACTION_DISCONNECT = "name.nekoshift.nekolink.client.vpn.DISCONNECT"
+    }
+
+    private fun registerDialerController() {
+        LibXray.registerDialerController { fd ->
+            val protected = protect(fd.toInt())
+
+            if (protected) {
+                Log.d(
+                    "NekoLinkVpnService",
+                    "Socket successfully protected: $fd"
+                )
+            } else {
+                Log.e(
+                    "NekoLinkVpnService",
+                    "Failed to protect socket: $fd"
+                )
+            }
+
+            protected
+        }
+
+        Log.i("NekoLinkVpnService", "Xray dialer controller registered")
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
@@ -53,10 +77,21 @@ class NekoLinkVpnService : VpnService() {
             Log.i("NekoLinkVpnService", "libXray API version: ${XrayCoreManager.getApiVersion()}")
             Log.i("NekoLinkVpnService", "Xray core version: ${XrayCoreManager.getVersion()}")
 
-            XrayCoreManager.testConfig(XrayTestConfig.config)
+            registerDialerController()
+            createVpnInterface()
+            val tunFd = vpnInterface?.fd
+                ?: throw IllegalStateException(
+                    "Файловый дескриптор TUN недоступен"
+                )
+
+            Log.i("NekoLinkVpnService", "TUN file descriptor: $tunFd")
+
+            val xrayConfig = XrayTestConfig.createTunConfig(tunFd)
+
+            XrayCoreManager.testConfig(xrayConfig)
             Log.i("NekoLinkVpnService", "Xray configuration test passed")
 
-            XrayCoreManager.start(XrayTestConfig.config)
+            XrayCoreManager.start(xrayConfig)
             Log.i("NekoLinkVpnService", "Xray core start requested")
 
             val isRunning = XrayCoreManager.isRunning()
@@ -65,8 +100,7 @@ class NekoLinkVpnService : VpnService() {
             if (!isRunning) {
                 throw IllegalStateException("Ядро Xray не запущено")
             }
-
-            createVpnInterface()
+            VpnStateManager.updateState(VpnState.CONNECTED)
         } catch (e: Exception) {
             Log.e("NekoLinkVpnService", "Failed to initialize VPN service", e)
             VpnStateManager.updateState(VpnState.ERROR)
