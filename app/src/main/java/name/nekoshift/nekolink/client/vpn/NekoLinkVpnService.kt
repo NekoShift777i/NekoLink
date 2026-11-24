@@ -158,6 +158,7 @@ class NekoLinkVpnService : VpnService() {
             .setSession("NekoLink")
             .setMtu(1500)
             .addAddress("10.255.255.1", 30)
+            .addRoute("1.1.1.1", 32)
             .establish()
 
         if (vpnInterface == null) {
