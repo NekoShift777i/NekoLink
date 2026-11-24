@@ -6,21 +6,25 @@ import org.json.JSONObject
 
 object XrayTestConfig {
 
-    fun createVlessTunConfig(
-        context: Context,
-        tunFd: Int,
-        mtu: Int = 1500
-    ): String {
-        val outboundConfig = context.assets
+    fun loadOutboundConfig(context: Context): JSONObject {
+        val config = context.assets
             .open("xray-test.json")
             .bufferedReader()
             .use { it.readText() }
 
+        return JSONObject(config)
+    }
+
+    fun createVlessTunConfig(
+        outboundConfig: JSONObject,
+        tunFd: Int,
+        mtu: Int = 1500
+    ): String {
         val config = JSONObject(createTunConfig(tunFd, mtu))
 
         config.put(
             "outbounds",
-            JSONArray().put(JSONObject(outboundConfig))
+            JSONArray().put(outboundConfig)
         )
 
         return config.toString()

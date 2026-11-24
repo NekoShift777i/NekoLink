@@ -14,9 +14,17 @@ import android.os.ParcelFileDescriptor
 
 import androidx.core.app.NotificationCompat
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+
 import name.nekoshift.nekolink.client.MainActivity
 import name.nekoshift.nekolink.client.R
 import name.nekoshift.nekolink.client.xray.XrayTestConfig
+import name.nekoshift.nekolink.client.network.NetworkDnsResolver
 
 import libXray.LibXray
 
@@ -52,6 +60,10 @@ class NekoLinkVpnService : VpnService() {
 
     private var vpnInterface: ParcelFileDescriptor? = null
 
+    private val serviceScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main
+    )
+
     override fun onCreate() {
         super.onCreate()
         VpnStateManager.updateState(VpnState.CONNECTING)
@@ -73,41 +85,83 @@ class NekoLinkVpnService : VpnService() {
             )
         }
 
-        try {
-            Log.i("NekoLinkVpnService", "libXray API version: ${XrayCoreManager.getApiVersion()}")
-            Log.i("NekoLinkVpnService", "Xray core version: ${XrayCoreManager.getVersion()}")
+        serviceScope.launch {
+            try {
+                Log.i(
+                    "NekoLinkVpnService",
+                    "libXray API version: ${XrayCoreManager.getApiVersion()}"
+                )
+                Log.i("NekoLinkVpnService", "Xray core version: ${XrayCoreManager.getVersion()}")
 
-            registerDialerController()
-            createVpnInterface()
-            val tunFd = vpnInterface?.fd
-                ?: throw IllegalStateException(
-                    "Файловый дескриптор TUN недоступен"
+                val outboundConfig = XrayTestConfig.loadOutboundConfig(
+                    this@NekoLinkVpnService
                 )
 
-            Log.i("NekoLinkVpnService", "TUN file descriptor: $tunFd")
+                val server = outboundConfig
+                    .getJSONObject("settings")
+                    .getJSONArray("vnext")
+                    .getJSONObject(0)
 
-            val xrayConfig = XrayTestConfig.createVlessTunConfig(
-                context = this,
-                tunFd = tunFd
-            )
+                val hostname = server.getString("address")
 
-            XrayCoreManager.testConfig(xrayConfig)
-            Log.i("NekoLinkVpnService", "Xray configuration test passed")
+                Log.i("NekoLinkVpnService", "Resolving VPN server: $hostname")
 
-            XrayCoreManager.start(xrayConfig)
-            Log.i("NekoLinkVpnService", "Xray core start requested")
+                val serverIp = NetworkDnsResolver.resolveIpv4(
+                    context = this@NekoLinkVpnService,
+                    hostname = hostname
+                )
 
-            val isRunning = XrayCoreManager.isRunning()
-            Log.i("NekoLinkVpnService", "Xray core running: $isRunning")
+                Log.i("NekoLinkVpnService", "VPN server resolved: $hostname -> $serverIp")
 
-            if (!isRunning) {
-                throw IllegalStateException("Ядро Xray не запущено")
+                server.put("address", serverIp)
+
+                registerDialerController()
+                createVpnInterface()
+
+                val tunFd = vpnInterface?.fd
+                    ?: throw IllegalStateException(
+                        "Файловый дескриптор TUN недоступен"
+                    )
+
+                Log.i("NekoLinkVpnService", "TUN file descriptor: $tunFd")
+
+                val xrayConfig = XrayTestConfig.createVlessTunConfig(
+                    outboundConfig = outboundConfig,
+                    tunFd = tunFd
+                )
+
+                XrayCoreManager.testConfig(xrayConfig)
+                Log.i("NekoLinkVpnService", "Xray configuration test passed")
+
+                XrayCoreManager.start(xrayConfig)
+                Log.i("NekoLinkVpnService", "Xray core start requested")
+
+                val isRunning = XrayCoreManager.isRunning()
+                Log.i("NekoLinkVpnService", "Xray core running: $isRunning")
+
+                if (!isRunning) {
+                    throw IllegalStateException("Ядро Xray не запущено")
+                }
+
+                VpnStateManager.updateState(VpnState.CONNECTED)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("NekoLinkVpnService", "Failed to initialize VPN service", e)
+                VpnStateManager.updateState(VpnState.ERROR)
+                stopXrayCore()
+
+                try {
+                    vpnInterface?.close()
+                } catch (closeError: Exception) {
+                    Log.e("NekoLinkVpnService", "Failed to close TUN interface", closeError)
+                } finally {
+                    vpnInterface = null
+                }
+
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
             }
-            VpnStateManager.updateState(VpnState.CONNECTED)
-        } catch (e: Exception) {
-            Log.e("NekoLinkVpnService", "Failed to initialize VPN service", e)
-            VpnStateManager.updateState(VpnState.ERROR)
-            stopSelf()
         }
     }
 
@@ -125,6 +179,7 @@ class NekoLinkVpnService : VpnService() {
 
     override fun onDestroy() {
         stopXrayCore()
+        serviceScope.cancel()
         try {
             vpnInterface?.let {
                 it.close()
@@ -161,7 +216,8 @@ class NekoLinkVpnService : VpnService() {
             .setSession("NekoLink")
             .setMtu(1500)
             .addAddress("10.255.255.1", 30)
-            .addRoute("1.1.1.1", 32)
+            .addDnsServer("1.1.1.1")
+            .addRoute("0.0.0.0", 0)
             .establish()
 
         if (vpnInterface == null) {
@@ -174,6 +230,7 @@ class NekoLinkVpnService : VpnService() {
     }
 
     private fun disconnectVpn() {
+        serviceScope.cancel()
         VpnStateManager.updateState(VpnState.DISCONNECTING)
 
         Log.i("NekoLinkVpnService", "Disconnecting VPN")
