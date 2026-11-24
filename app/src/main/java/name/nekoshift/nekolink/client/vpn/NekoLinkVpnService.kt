@@ -1,4 +1,5 @@
 package name.nekoshift.nekolink.client.vpn
+import name.nekoshift.nekolink.client.xray.XrayCoreManager
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,6 +16,7 @@ import androidx.core.app.NotificationCompat
 
 import name.nekoshift.nekolink.client.MainActivity
 import name.nekoshift.nekolink.client.R
+import name.nekoshift.nekolink.client.xray.XrayTestConfig
 
 class NekoLinkVpnService : VpnService() {
 
@@ -31,6 +33,29 @@ class NekoLinkVpnService : VpnService() {
         VpnStateManager.updateState(VpnState.CONNECTING)
 
         Log.i("NekoLinkVpnService", "VPN service created")
+
+        Log.i("NekoLinkVpnService", "libXray API version: ${XrayCoreManager.getApiVersion()}")
+        Log.i("NekoLinkVpnService", "Xray core version: ${XrayCoreManager.getVersion()}")
+
+        try {
+            XrayCoreManager.testConfig(XrayTestConfig.config)
+            Log.i("NekoLinkVpnService", "Xray configuration test passed")
+
+            XrayCoreManager.start(XrayTestConfig.config)
+            Log.i("NekoLinkVpnService", "Xray core start requested")
+
+            val isRunning = XrayCoreManager.isRunning()
+            Log.i("NekoLinkVpnService", "Xray core running: $isRunning")
+
+            if (!isRunning) {
+                throw IllegalStateException("Ядро Xray не запущено")
+            }
+        } catch (e: Exception) {
+            Log.e("NekoLinkVpnService", "Failed to initialize Xray core", e)
+            VpnStateManager.updateState(VpnState.ERROR)
+            stopSelf()
+            return
+        }
 
         createNotificationChannel()
 
@@ -69,6 +94,7 @@ class NekoLinkVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        stopXrayCore()
         try {
             vpnInterface?.let {
                 it.close()
@@ -87,6 +113,17 @@ class NekoLinkVpnService : VpnService() {
         }
 
         super.onDestroy()
+    }
+
+    private fun stopXrayCore() {
+        try {
+            if (XrayCoreManager.isRunning()) {
+                XrayCoreManager.stop()
+                Log.i("NekoLinkVpnService", "Xray core stopped")
+            }
+        } catch (e: Exception) {
+            Log.e("NekoLinkVpnService", "Failed to stop Xray core", e)
+        }
     }
 
     private fun createVpnInterface() {
@@ -109,6 +146,7 @@ class NekoLinkVpnService : VpnService() {
         VpnStateManager.updateState(VpnState.DISCONNECTING)
 
         Log.i("NekoLinkVpnService", "Disconnecting VPN")
+        stopXrayCore()
 
         try {
             vpnInterface?.close()
