@@ -30,3 +30,6 @@ local.properties
 /buildSrc/build/
 /buildSrc/.gradle/
 /buildSrc/.kotlin/
+
+# Локальные испытательные конфигурации VPN
+/app/src/main/assets/xray-test.json

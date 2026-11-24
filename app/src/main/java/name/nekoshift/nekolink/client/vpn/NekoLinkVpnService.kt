@@ -86,7 +86,10 @@ class NekoLinkVpnService : VpnService() {
 
             Log.i("NekoLinkVpnService", "TUN file descriptor: $tunFd")
 
-            val xrayConfig = XrayTestConfig.createTunConfig(tunFd)
+            val xrayConfig = XrayTestConfig.createVlessTunConfig(
+                context = this,
+                tunFd = tunFd
+            )
 
             XrayCoreManager.testConfig(xrayConfig)
             Log.i("NekoLinkVpnService", "Xray configuration test passed")
