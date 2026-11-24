@@ -87,18 +87,18 @@ fun VpnPermissionScreen() {
     }
 
     fun stopVpnService() {
-        Log.i("NekoLInk", "Stopping VPN Serivce")
+        Log.i("NekoLink", "Sending VPN disconnect command")
 
         VpnStateManager.updateState(VpnState.DISCONNECTING)
 
         val serviceIntent = Intent(
             context,
             NekoLinkVpnService::class.java
-        )
-
-        if (!context.stopService(serviceIntent)) {
-            VpnStateManager.updateState((VpnState.DISCONNECTED))
+        ).apply {
+            action = NekoLinkVpnService.ACTION_DISCONNECT
         }
+
+        context.startService(serviceIntent)
     }
 
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
