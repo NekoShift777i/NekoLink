@@ -322,26 +322,31 @@ class NekoLinkVpnService : VpnService() {
         }
     }
 
-    private fun releaseVpnResources(): Boolean {
+    private suspend fun releaseVpnResources(): Boolean = xrayMutex.withLock {
         if (resourcesReleased) {
-            return true
+            return@withLock true
         }
         // Служба не получала ответственность за ресурсы VPN
         if (!ownsVpnResources) {
             Log.i("NekoLinkVpnService", "VPN resource cleanup skipped: resources not owned")
-            return true
+            return@withLock true
         }
 
-        var coreStopped = stopXrayCore()
+        var coreStopped = withContext(Dispatchers.IO) {
+            stopXrayCore()
+        }
 
         if (!coreStopped) {
             Log.w("NekoLinkVpnService", "Retrying Xray core stop")
-            coreStopped = stopXrayCore()
+
+            coreStopped = withContext(Dispatchers.IO) {
+                stopXrayCore()
+            }
         }
 
         if (!coreStopped) {
             Log.e("NekoLinkVpnService", "Xray core stop attempts exhausted")
-            return false
+            return@withLock false
         }
 
         val interfaceClosed = closeVpnInterface()
@@ -355,7 +360,7 @@ class NekoLinkVpnService : VpnService() {
             Log.e("NekoLinkVpnService", "VPN resource cleanup failed")
         }
 
-        return resourcesReleased
+        return@withLock resourcesReleased
     }
 
     private fun createVpnInterface() {
