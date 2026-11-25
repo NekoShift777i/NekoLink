@@ -1,5 +1,4 @@
 package name.nekoshift.nekolink.client.vpn
-import name.nekoshift.nekolink.client.xray.XrayCoreManager
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -20,11 +19,18 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.cancelAndJoin
 
 import name.nekoshift.nekolink.client.MainActivity
 import name.nekoshift.nekolink.client.R
 import name.nekoshift.nekolink.client.xray.XrayTestConfig
 import name.nekoshift.nekolink.client.network.NetworkDnsResolver
+import name.nekoshift.nekolink.client.xray.XrayCoreManager
 
 import libXray.LibXray
 
@@ -34,6 +40,8 @@ class NekoLinkVpnService : VpnService() {
         private const val NOTIFICATION_CHANNEL_ID = "nekolink_vpn"
         private const val NOTIFICATION_ID = 1
         const val ACTION_DISCONNECT = "name.nekoshift.nekolink.client.vpn.DISCONNECT"
+
+        private val xrayMutex = Mutex()
     }
 
     private fun registerDialerController() {
@@ -64,6 +72,9 @@ class NekoLinkVpnService : VpnService() {
         SupervisorJob() + Dispatchers.Main
     )
 
+    private var connectionJob: Job? = null
+    private var disconnectionJob: Job? = null
+
     override fun onCreate() {
         super.onCreate()
         VpnStateManager.updateState(VpnState.CONNECTING)
@@ -85,17 +96,23 @@ class NekoLinkVpnService : VpnService() {
             )
         }
 
-        serviceScope.launch {
+        connectionJob = serviceScope.launch {
             try {
                 Log.i(
                     "NekoLinkVpnService",
                     "libXray API version: ${XrayCoreManager.getApiVersion()}"
                 )
-                Log.i("NekoLinkVpnService", "Xray core version: ${XrayCoreManager.getVersion()}")
+                val xrayVersion = withContext(Dispatchers.IO) {
+                    XrayCoreManager.getVersion()
+                }
 
-                val outboundConfig = XrayTestConfig.loadOutboundConfig(
-                    this@NekoLinkVpnService
-                )
+                Log.i("NekoLinkVpnService", "Xray core version: $xrayVersion")
+
+                val outboundConfig = withContext(Dispatchers.IO) {
+                    XrayTestConfig.loadOutboundConfig(
+                        this@NekoLinkVpnService
+                    )
+                }
 
                 val server = outboundConfig
                     .getJSONObject("settings")
@@ -105,6 +122,8 @@ class NekoLinkVpnService : VpnService() {
                 val hostname = server.getString("address")
 
                 Log.i("NekoLinkVpnService", "Resolving VPN server: $hostname")
+                // TODO: Удалить испытательную задержку после завершения шага 6.3
+                delay(5000L)
 
                 val serverIp = NetworkDnsResolver.resolveIpv4(
                     context = this@NekoLinkVpnService,
@@ -238,23 +257,37 @@ class NekoLinkVpnService : VpnService() {
     }
 
     private fun disconnectVpn() {
-        serviceScope.cancel()
-        VpnStateManager.updateState(VpnState.DISCONNECTING)
-
-        Log.i("NekoLinkVpnService", "Disconnecting VPN")
-        stopXrayCore()
-
-        try {
-            vpnInterface?.close()
-            Log.i("NekoLinkVpnService", "TUN interface closed")
-        } catch (e: Exception) {
-            Log.e("NekoLinkVpnService", "Failed to close TUN interface", e)
-        } finally {
-            vpnInterface = null
+        if (disconnectionJob != null) {
+            return
         }
 
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        connectionJob?.cancel()
+        VpnStateManager.updateState(VpnState.DISCONNECTING)
+
+        disconnectionJob = serviceScope.launch {
+            Log.i("NekoLinkVpnService", "Disconnecting VPN")
+
+            connectionJob?.cancelAndJoin()
+            connectionJob = null
+
+            Log.i("NekoLinkVpnService", "VPN connection job completed")
+
+            stopXrayCore()
+
+            try {
+                vpnInterface?.let {
+                    it.close()
+                    Log.i("NekoLinkVpnService", "TUN interface closed")
+                }
+            } catch (e: Exception) {
+                Log.e("NekoLinkVpnService", "Failed to close TUN interface", e)
+            } finally {
+                vpnInterface = null
+            }
+
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
     }
 
     private fun createNotificationChannel() {
