@@ -177,6 +177,14 @@ class NekoLinkVpnService : VpnService() {
         return super.onBind(intent)
     }
 
+    override fun onRevoke() {
+        Log.w("NekoLinkVpnService", "VPN permission revoked")
+
+        serviceScope.launch {
+            disconnectVpn()
+        }
+    }
+
     override fun onDestroy() {
         stopXrayCore()
         serviceScope.cancel()
