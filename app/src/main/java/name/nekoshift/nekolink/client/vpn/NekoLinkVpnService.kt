@@ -42,6 +42,16 @@ class NekoLinkVpnService : VpnService() {
         const val ACTION_DISCONNECT = "name.nekoshift.nekolink.client.vpn.DISCONNECT"
 
         private val xrayMutex = Mutex()
+        // Область сопрограмм для завершения операций после уничтожения службы
+        private val cleanupScope = CoroutineScope(
+            SupervisorJob() + Dispatchers.Main
+        )
+        // Текущий экземпляр VPN-службы
+        private var activeService: NekoLinkVpnService? = null
+        // Задача отложенного освобождения ресурсов предыдущей службы
+        private var cleanupJob: Job? = null
+        // Результат освобождения ресурсов предыдущего экземпляра службы
+        private var cleanupSuccessful = true
     }
 
     private fun registerDialerController() {
@@ -75,9 +85,12 @@ class NekoLinkVpnService : VpnService() {
     private var connectionJob: Job? = null
     private var disconnectionJob: Job? = null
     private var resourcesReleased = false
+    // Признак получения ответственности за ресурсы VPN
+    private var ownsVpnResources = false
 
     override fun onCreate() {
         super.onCreate()
+        activeService = this
         VpnStateManager.updateState(VpnState.CONNECTING)
 
         Log.i("NekoLinkVpnService", "VPN service created")
@@ -99,6 +112,26 @@ class NekoLinkVpnService : VpnService() {
 
         connectionJob = serviceScope.launch {
             try {
+                // Ожидание освобождения ресурсов предыдущего экземпляра службы
+                cleanupJob?.let { previousCleanupJob ->
+                    Log.i("NekoLinkVpnService", "Waiting for previous VPN service cleanup")
+
+                    previousCleanupJob.join()
+
+                    Log.i("NekoLinkVpnService", "Previous VPN service cleanup finished")
+                }
+                // Запрет инициализации при неудачной очистке предыдущей службы
+                if (!cleanupSuccessful) {
+                    Log.e("NekoLinkVpnService", "Previous VPN service cleanup failed")
+
+                    VpnStateManager.updateState(VpnState.ERROR)
+
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+
+                    return@launch
+                }
+                ownsVpnResources = true
                 Log.i(
                     "NekoLinkVpnService",
                     "libXray API version: ${XrayCoreManager.getApiVersion()}"
@@ -213,13 +246,39 @@ class NekoLinkVpnService : VpnService() {
 
         serviceScope.cancel()
 
-        val cleanupSuccessful = releaseVpnResources()
+        if (ownsVpnResources && !resourcesReleased) {
+            cleanupSuccessful = false
 
-        if (!cleanupSuccessful) {
-            Log.e("NekoLinkVpnService", "VPN resource cleanup failed during service destruction")
-            VpnStateManager.updateState(VpnState.ERROR)
-        } else if (VpnStateManager.state.value != VpnState.ERROR) {
-            VpnStateManager.updateState(VpnState.DISCONNECTED)
+            cleanupJob = cleanupScope.launch {
+                Log.i("NekoLinkVpnService", "Deferred VPN resource cleanup started")
+
+                connectionJob?.join()
+                disconnectionJob?.join()
+
+                cleanupSuccessful = releaseVpnResources()
+
+                if (!cleanupSuccessful) {
+                    Log.e("NekoLinkVpnService", "Deferred VPN resource cleanup failed")
+                } else {
+                    Log.i("NekoLinkVpnService", "Deferred VPN resource cleanup completed")
+                }
+
+                if (activeService == null) {
+                    if (!cleanupSuccessful) {
+                        VpnStateManager.updateState(VpnState.ERROR)
+                    } else if (VpnStateManager.state.value != VpnState.ERROR) {
+                        VpnStateManager.updateState(VpnState.DISCONNECTED)
+                    }
+                }
+            }
+        } else if (activeService === this) {
+            if (VpnStateManager.state.value != VpnState.ERROR) {
+                VpnStateManager.updateState(VpnState.DISCONNECTED)
+            }
+        }
+
+        if (activeService === this) {
+            activeService = null
         }
 
         Log.i("NekoLinkVpnService", "VPN service destroyed")
@@ -267,6 +326,11 @@ class NekoLinkVpnService : VpnService() {
         if (resourcesReleased) {
             return true
         }
+        // Служба не получала ответственность за ресурсы VPN
+        if (!ownsVpnResources) {
+            Log.i("NekoLinkVpnService", "VPN resource cleanup skipped: resources not owned")
+            return true
+        }
 
         var coreStopped = stopXrayCore()
 
@@ -285,6 +349,7 @@ class NekoLinkVpnService : VpnService() {
         resourcesReleased = interfaceClosed
 
         if (resourcesReleased) {
+            ownsVpnResources = false
             Log.i("NekoLinkVpnService", "VPN resource cleanup completed")
         } else {
             Log.e("NekoLinkVpnService", "VPN resource cleanup failed")
