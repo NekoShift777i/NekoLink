@@ -103,8 +103,10 @@ class NekoLinkVpnService : VpnService() {
                     "NekoLinkVpnService",
                     "libXray API version: ${XrayCoreManager.getApiVersion()}"
                 )
-                val xrayVersion = withContext(Dispatchers.IO) {
-                    XrayCoreManager.getVersion()
+                val xrayVersion = xrayMutex.withLock {
+                    withContext(Dispatchers.IO) {
+                        XrayCoreManager.getVersion()
+                    }
                 }
 
                 Log.i("NekoLinkVpnService", "Xray core version: $xrayVersion")
@@ -150,7 +152,11 @@ class NekoLinkVpnService : VpnService() {
                     tunFd = tunFd
                 )
 
-                XrayCoreManager.testConfig(xrayConfig)
+                xrayMutex.withLock {
+                    withContext(Dispatchers.IO) {
+                        XrayCoreManager.testConfig(xrayConfig)
+                    }
+                }
                 Log.i("NekoLinkVpnService", "Xray configuration test passed")
 
                 XrayCoreManager.start(xrayConfig)
