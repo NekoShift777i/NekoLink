@@ -192,10 +192,14 @@ class NekoLinkVpnService : VpnService() {
                 }
                 Log.i("NekoLinkVpnService", "Xray configuration test passed")
 
-                XrayCoreManager.start(xrayConfig)
-                Log.i("NekoLinkVpnService", "Xray core start requested")
+                val isRunning = xrayMutex.withLock {
+                    withContext(Dispatchers.IO) {
+                        XrayCoreManager.start(xrayConfig)
+                        Log.i("NekoLinkVpnService", "Xray core start requested")
 
-                val isRunning = XrayCoreManager.isRunning()
+                        XrayCoreManager.isRunning()
+                    }
+                }
                 Log.i("NekoLinkVpnService", "Xray core running: $isRunning")
 
                 if (!isRunning) {
