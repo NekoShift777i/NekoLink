@@ -74,6 +74,7 @@ class NekoLinkVpnService : VpnService() {
 
     private var connectionJob: Job? = null
     private var disconnectionJob: Job? = null
+    private var resourcesReleased = false
 
     override fun onCreate() {
         super.onCreate()
@@ -167,19 +168,16 @@ class NekoLinkVpnService : VpnService() {
                 throw e
             } catch (e: Exception) {
                 Log.e("NekoLinkVpnService", "Failed to initialize VPN service", e)
-                VpnStateManager.updateState(VpnState.ERROR)
-                stopXrayCore()
 
-                try {
-                    vpnInterface?.close()
-                } catch (closeError: Exception) {
-                    Log.e("NekoLinkVpnService", "Failed to close TUN interface", closeError)
-                } finally {
-                    vpnInterface = null
+                if (!releaseVpnResources()) {
+                    Log.e("NekoLinkVpnService", "VPN initialization cleanup failed")
+                    VpnStateManager.updateState(VpnState.DISCONNECT_ERROR)
+                } else {
+                    VpnStateManager.updateState(VpnState.ERROR)
+
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
                 }
-
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
             }
         }
     }
@@ -205,37 +203,88 @@ class NekoLinkVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        stopXrayCore()
+        Log.i("NekoLinkVpnService", "VPN service destruction started")
+
         serviceScope.cancel()
-        try {
-            vpnInterface?.let {
-                it.close()
-                Log.i("NekoLinkVpnService", "TUN interface closed")
-            }
-        } catch (e: Exception) {
-            Log.e("NekoLinkVpnService", "Failed to close TUN interface", e)
-        } finally {
-            vpnInterface = null
+
+        val cleanupSuccessful = releaseVpnResources()
+
+        if (!cleanupSuccessful) {
+            Log.e("NekoLinkVpnService", "VPN resource cleanup failed during service destruction")
+            VpnStateManager.updateState(VpnState.ERROR)
+        } else if (VpnStateManager.state.value != VpnState.ERROR) {
+            VpnStateManager.updateState(VpnState.DISCONNECTED)
         }
 
         Log.i("NekoLinkVpnService", "VPN service destroyed")
 
-        if (VpnStateManager.state.value != VpnState.ERROR) {
-            VpnStateManager.updateState(VpnState.DISCONNECTED)
-        }
-
         super.onDestroy()
     }
 
-    private fun stopXrayCore() {
-        try {
+    private fun stopXrayCore(): Boolean {
+        return try {
             if (XrayCoreManager.isRunning()) {
                 XrayCoreManager.stop()
+
+                if (XrayCoreManager.isRunning()) {
+                    throw IllegalStateException("Ядро Xray продолжает работать после остановки")
+                }
+
                 Log.i("NekoLinkVpnService", "Xray core stopped")
+                Log.i("NekoLinkVpnService", "Xray core stop verified")
             }
+
+            true
         } catch (e: Exception) {
             Log.e("NekoLinkVpnService", "Failed to stop Xray core", e)
+            false
         }
+    }
+
+    private fun closeVpnInterface(): Boolean {
+        return try {
+            vpnInterface?.let {
+                it.close()
+                Log.i("NekoLinkVpnService", "TUN interface closed")
+            }
+
+            true
+        } catch (e: Exception) {
+            Log.e("NekoLinkVpnService", "Failed to close TUN interface", e)
+            false
+        } finally {
+            vpnInterface = null
+        }
+    }
+
+    private fun releaseVpnResources(): Boolean {
+        if (resourcesReleased) {
+            return true
+        }
+
+        var coreStopped = stopXrayCore()
+
+        if (!coreStopped) {
+            Log.w("NekoLinkVpnService", "Retrying Xray core stop")
+            coreStopped = stopXrayCore()
+        }
+
+        if (!coreStopped) {
+            Log.e("NekoLinkVpnService", "Xray core stop attempts exhausted")
+            return false
+        }
+
+        val interfaceClosed = closeVpnInterface()
+
+        resourcesReleased = interfaceClosed
+
+        if (resourcesReleased) {
+            Log.i("NekoLinkVpnService", "VPN resource cleanup completed")
+        } else {
+            Log.e("NekoLinkVpnService", "VPN resource cleanup failed")
+        }
+
+        return resourcesReleased
     }
 
     private fun createVpnInterface() {
@@ -272,21 +321,20 @@ class NekoLinkVpnService : VpnService() {
 
             Log.i("NekoLinkVpnService", "VPN connection job completed")
 
-            stopXrayCore()
-
-            try {
-                vpnInterface?.let {
-                    it.close()
-                    Log.i("NekoLinkVpnService", "TUN interface closed")
-                }
-            } catch (e: Exception) {
-                Log.e("NekoLinkVpnService", "Failed to close TUN interface", e)
-            } finally {
-                vpnInterface = null
+            if (!releaseVpnResources()) {
+                Log.e("NekoLinkVpnService", "VPN disconnection failed")
+                VpnStateManager.updateState(VpnState.DISCONNECT_ERROR)
+                disconnectionJob = null
+                return@launch
             }
 
+            Log.i("NekoLinkVpnService", "Removing foreground notification")
             stopForeground(STOP_FOREGROUND_REMOVE)
+            Log.i("NekoLinkVpnService", "Foreground notification removed")
+
+            Log.i("NekoLinkVpnService", "Requesting VPN service stop")
             stopSelf()
+            Log.i("NekoLinkVpnService", "VPN service stop requested")
         }
     }
 

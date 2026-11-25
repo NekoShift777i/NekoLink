@@ -126,7 +126,9 @@ fun VpnPermissionScreen() {
                         }
                     }
 
-                    VpnState.CONNECTING, VpnState.CONNECTED -> {
+                    VpnState.CONNECTING,
+                    VpnState.CONNECTED,
+                    VpnState.DISCONNECT_ERROR -> {
                         stopVpnService()
                     }
 
@@ -142,6 +144,7 @@ fun VpnPermissionScreen() {
                     VpnState.CONNECTED -> "Отключиться"
                     VpnState.DISCONNECTING -> "Отключение..."
                     VpnState.ERROR -> "Повторить подключение"
+                    VpnState.DISCONNECT_ERROR -> "Повторить отключение"
                 }
             )
         }

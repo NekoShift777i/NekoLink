@@ -5,5 +5,6 @@ enum class VpnState {
     CONNECTING,
     CONNECTED,
     DISCONNECTING,
+    DISCONNECT_ERROR,
     ERROR
 }

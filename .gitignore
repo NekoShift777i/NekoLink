@@ -33,3 +33,6 @@ local.properties
 
 # Локальные испытательные конфигурации VPN
 /app/src/main/assets/xray-test.json
+
+# Others
+*.ps1
